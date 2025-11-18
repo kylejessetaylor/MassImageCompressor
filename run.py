@@ -1,11 +1,44 @@
 from MediaProcessor import MediaProcessor
 from pathlib import Path
 import configparser
+import sys
+import os
 
-base_dir = Path(__file__).resolve().parent
+
+def get_app_base_dir() -> Path:
+	"""Return the directory the app is running from.
+
+	When running as a bundled executable (PyInstaller, cx_Freeze, etc.) use
+	the executable location. Otherwise use the script file location.
+	This ensures `settings.ini` placed next to the exe is found.
+	"""
+	# PyInstaller and similar set ``sys.frozen`` when bundled.
+	if getattr(sys, "frozen", False):
+		return Path(sys.executable).resolve().parent
+	return Path(__file__).resolve().parent
+
+
+base_dir = get_app_base_dir()
 
 config_path = base_dir / 'settings.ini'
 config = configparser.ConfigParser()
+
+# If the config isn't next to the exe/script, try a couple of reasonable
+# fallbacks: current working directory and PyInstaller's _MEIPASS.
+if not config_path.exists():
+	alt_cwd = Path(os.getcwd()) / 'settings.ini'
+	if alt_cwd.exists():
+		config_path = alt_cwd
+	else:
+		meipass = getattr(sys, '_MEIPASS', None)
+		if meipass:
+			meipass_candidate = Path(meipass) / 'settings.ini'
+			if meipass_candidate.exists():
+				config_path = meipass_candidate
+
+if not config_path.exists():
+	raise SystemExit(f"settings.ini not found. Looked in: {base_dir}, cwd: {os.getcwd()}")
+
 config.read(config_path)
 
 # Replace this with your source directory path
